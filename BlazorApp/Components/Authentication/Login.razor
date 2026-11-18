@@ -1,0 +1,59 @@
+﻿@page "/login"
+@using BlazorApp.Auth
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager NavMgr
+
+<PageTitle>Login</PageTitle>
+
+<AuthorizeView>
+    <NotAuthorized>
+        <h3>Please log in</h3>
+
+        <div class="mb-3">
+            <label class="form-label">User name:</label>
+            <input class="form-control" type="text" @bind="userName" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Password:</label>
+            <input class="form-control" type="password" @bind="password" />
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorLabel))
+        {
+            <p style="color: red">@errorLabel</p>
+        }
+
+        <button class="btn btn-primary" @onclick="LoginAsync">Log in</button>
+    </NotAuthorized>
+    <Authorized>
+        <h3>Hello, @context.User.Identity?.Name</h3>
+        <button class="btn btn-secondary" @onclick="LogoutAsync">Log out</button>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private string userName = "";
+    private string password = "";
+    private string errorLabel = "";
+
+    private async Task LoginAsync()
+    {
+        errorLabel = "";
+        try
+        {
+            await ((SimpleAuthProvider)AuthProvider).Login(userName, password);
+            NavMgr.NavigateTo("/");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            errorLabel = $"Error: {e.Message}";
+        }
+    }
+
+    private async Task LogoutAsync()
+    {
+        await ((SimpleAuthProvider)AuthProvider).Logout();
+    }
+}

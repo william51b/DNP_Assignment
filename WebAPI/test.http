@@ -1,0 +1,42 @@
+﻿@host = http://localhost:5296
+
+POST {{host}}/users
+Content-Type: application/json
+
+{ "userName": "alice", "password": "pw123" }
+
+###
+POST {{host}}/posts
+Content-Type: application/json
+
+{ "title": "Hello", "body": "First post", "userId": 1 }
+
+###
+POST {{host}}/comments
+Content-Type: application/json
+
+{ "body": "Nice!", "postId": 1, "userId": 1 }
+
+###
+GET {{host}}/posts/1?includeComments=true
+
+###
+GET {{host}}/users/999
+
+###
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "userName": "alice", "password": "pw123" }
+
+###
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "userName": "alice", "password": "wrong" }
+
+###
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "userName": "nobody", "password": "pw123" }

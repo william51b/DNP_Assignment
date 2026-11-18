@@ -1,0 +1,24 @@
+﻿@page "/"
+
+<PageTitle>Forum</PageTitle>
+
+<h1>Forum</h1>
+
+<AuthorizeView>
+    <Authorized>
+        <h3>Hello, @context.User.Identity?.Name</h3>
+        <ul>
+            <li><a href="posts/create">Create post</a></li>
+            <li><a href="posts">View posts</a></li>
+            <li><a href="login">Log out</a></li>
+        </ul>
+    </Authorized>
+    <NotAuthorized>
+        <p>You are not logged in.</p>
+        <ul>
+            <li><a href="login">Log in</a></li>
+            <li><a href="users/create">Create user</a></li>
+            <li><a href="posts">View posts</a></li>
+        </ul>
+    </NotAuthorized>
+</AuthorizeView>
