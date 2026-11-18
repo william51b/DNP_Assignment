@@ -1,6 +1,7 @@
 ﻿using ApiContracts;
 using Entities;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using RepositoryContracts;
 
 namespace WebAPI.Controllers;
@@ -62,13 +63,12 @@ public class CommentsController : ControllerBase
 
     // GET /comments?userId=1&userName=bob&postId=2
     [HttpGet]
-    public ActionResult<IEnumerable<CommentDto>> GetComments(
+    public async Task<ActionResult<IEnumerable<CommentDto>>> GetComments(
         [FromQuery] int? userId,
         [FromQuery] string? userName,
         [FromQuery] int? postId)
     {
         IQueryable<Comment> comments = commentRepo.GetManyAsync();
-        List<User> users = userRepo.GetManyAsync().ToList();
 
         if (userId.HasValue)
             comments = comments.Where(c => c.UserId == userId.Value);
@@ -77,16 +77,17 @@ public class CommentsController : ControllerBase
             comments = comments.Where(c => c.PostId == postId.Value);
 
         if (!string.IsNullOrWhiteSpace(userName))
-        {
-            List<int> matchingIds = users
-                .Where(u => u.Username.ToLower().Contains(userName.ToLower()))
-                .Select(u => u.Id).ToList();
-            comments = comments.Where(c => matchingIds.Contains(c.UserId));
-        }
+            comments = comments.Where(c => c.User.Username.ToLower().Contains(userName.ToLower()));
 
-        List<CommentDto> result = comments.ToList()
-            .Select(c => ToDto(c, users.FirstOrDefault(u => u.Id == c.UserId)?.Username ?? "Unknown"))
-            .ToList();
+        List<CommentDto> result = await comments.Select(c => new CommentDto
+        {
+            Id = c.Id,
+            Body = c.Body,
+            PostId = c.PostId,
+            UserId = c.UserId,
+            AuthorName = c.User.Username
+        }).ToListAsync();
+
         return Ok(result);
     }
 

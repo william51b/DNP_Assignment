@@ -15,3 +15,8 @@ obj/
 # OS files
 .DS_Store
 Thumbs.db
+bin/
+obj/
+*.db
+*.db-shm
+*.db-wal

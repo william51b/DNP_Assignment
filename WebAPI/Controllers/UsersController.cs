@@ -1,5 +1,6 @@
 ﻿using ApiContracts;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using RepositoryContracts;
 
 namespace WebAPI.Controllers;
@@ -21,7 +22,7 @@ public class UsersController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.UserName) || string.IsNullOrWhiteSpace(request.Password))
             return BadRequest("Username and password are required.");
 
-        if (UserNameTaken(request.UserName))
+        if (await UserNameTakenAsync(request.UserName))
             return Conflict($"Username '{request.UserName}' is already taken.");
 
         User created = await userRepo.AddAsync(new User
@@ -42,7 +43,7 @@ public class UsersController : ControllerBase
 
         User existing = await userRepo.GetSingleAsync(id);
 
-        if (UserNameTaken(request.UserName, excludeId: id))
+        if (await UserNameTakenAsync(request.UserName, excludeId: id))
             return Conflict($"Username '{request.UserName}' is already taken.");
 
         existing.Username = request.UserName;
@@ -61,14 +62,18 @@ public class UsersController : ControllerBase
 
     // GET /users?userNameContains=abc
     [HttpGet]
-    public ActionResult<IEnumerable<UserDto>> GetUsers([FromQuery] string? userNameContains)
+    public async Task<ActionResult<IEnumerable<UserDto>>> GetUsers([FromQuery] string? userNameContains)
     {
         IQueryable<User> users = userRepo.GetManyAsync();
 
         if (!string.IsNullOrWhiteSpace(userNameContains))
             users = users.Where(u => u.Username.ToLower().Contains(userNameContains.ToLower()));
 
-        return Ok(users.Select(u => new UserDto { Id = u.Id, UserName = u.Username }).ToList());
+        List<UserDto> result = await users
+            .Select(u => new UserDto { Id = u.Id, UserName = u.Username })
+            .ToListAsync();
+
+        return Ok(result);
     }
 
     [HttpDelete("{id:int}")]
@@ -78,8 +83,8 @@ public class UsersController : ControllerBase
         return NoContent();
     }
 
-    private bool UserNameTaken(string userName, int? excludeId = null) =>
-        userRepo.GetManyAsync().Any(u =>
+    private async Task<bool> UserNameTakenAsync(string userName, int? excludeId = null) =>
+        await userRepo.GetManyAsync().AnyAsync(u =>
             u.Username.ToLower() == userName.ToLower() && u.Id != excludeId);
 
     private static UserDto ToDto(User u) => new() { Id = u.Id, UserName = u.Username };

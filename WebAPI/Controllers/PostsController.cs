@@ -1,6 +1,7 @@
 ﻿using ApiContracts;
 using Entities;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using RepositoryContracts;
 
 namespace WebAPI.Controllers;
@@ -59,25 +60,51 @@ public class PostsController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<PostDto>> GetPost([FromRoute] int id, [FromQuery] bool includeComments = false)
     {
-        Post post = await postRepo.GetSingleAsync(id);
-        User? author = await GetAuthorOrNullAsync(post.UserId);
-        PostDto dto = ToDto(post, author?.Username ?? "Unknown");
+        IQueryable<Post> query = postRepo.GetManyAsync().Where(p => p.Id == id);
+        PostDto? dto;
 
         if (includeComments)
-            dto.Comments = BuildCommentDtos(commentRepo.GetManyAsync().Where(c => c.PostId == id).ToList());
+        {
+            dto = await query.Select(p => new PostDto
+            {
+                Id = p.Id,
+                Title = p.Title,
+                Body = p.Body,
+                UserId = p.UserId,
+                AuthorName = p.User.Username,
+                Comments = p.Comments.Select(c => new CommentDto
+                {
+                    Id = c.Id,
+                    Body = c.Body,
+                    PostId = c.PostId,
+                    UserId = c.UserId,
+                    AuthorName = c.User.Username
+                }).ToList()
+            }).FirstOrDefaultAsync();
+        }
+        else
+        {
+            dto = await query.Select(p => new PostDto
+            {
+                Id = p.Id,
+                Title = p.Title,
+                Body = p.Body,
+                UserId = p.UserId,
+                AuthorName = p.User.Username
+            }).FirstOrDefaultAsync();
+        }
 
-        return Ok(dto);
+        return dto == null ? NotFound() : Ok(dto);
     }
 
     // GET /posts?titleContains=abc&userId=1&userName=bob
     [HttpGet]
-    public ActionResult<IEnumerable<PostDto>> GetPosts(
+    public async Task<ActionResult<IEnumerable<PostDto>>> GetPosts(
         [FromQuery] string? titleContains,
         [FromQuery] int? userId,
         [FromQuery] string? userName)
     {
         IQueryable<Post> posts = postRepo.GetManyAsync();
-        List<User> users = userRepo.GetManyAsync().ToList();
 
         if (!string.IsNullOrWhiteSpace(titleContains))
             posts = posts.Where(p => p.Title.ToLower().Contains(titleContains.ToLower()));
@@ -86,16 +113,17 @@ public class PostsController : ControllerBase
             posts = posts.Where(p => p.UserId == userId.Value);
 
         if (!string.IsNullOrWhiteSpace(userName))
-        {
-            List<int> matchingIds = users
-                .Where(u => u.Username.ToLower().Contains(userName.ToLower()))
-                .Select(u => u.Id).ToList();
-            posts = posts.Where(p => matchingIds.Contains(p.UserId));
-        }
+            posts = posts.Where(p => p.User.Username.ToLower().Contains(userName.ToLower()));
 
-        List<PostDto> result = posts.ToList()
-            .Select(p => ToDto(p, users.FirstOrDefault(u => u.Id == p.UserId)?.Username ?? "Unknown"))
-            .ToList();
+        List<PostDto> result = await posts.Select(p => new PostDto
+        {
+            Id = p.Id,
+            Title = p.Title,
+            Body = p.Body,
+            UserId = p.UserId,
+            AuthorName = p.User.Username
+        }).ToListAsync();
+
         return Ok(result);
     }
 
@@ -104,8 +132,19 @@ public class PostsController : ControllerBase
     public async Task<ActionResult<IEnumerable<CommentDto>>> GetCommentsForPost([FromRoute] int postId)
     {
         await postRepo.GetSingleAsync(postId);
-        List<Comment> comments = commentRepo.GetManyAsync().Where(c => c.PostId == postId).ToList();
-        return Ok(BuildCommentDtos(comments));
+
+        List<CommentDto> comments = await commentRepo.GetManyAsync()
+            .Where(c => c.PostId == postId)
+            .Select(c => new CommentDto
+            {
+                Id = c.Id,
+                Body = c.Body,
+                PostId = c.PostId,
+                UserId = c.UserId,
+                AuthorName = c.User.Username
+            }).ToListAsync();
+
+        return Ok(comments);
     }
 
     [HttpDelete("{id:int}")]
@@ -119,19 +158,6 @@ public class PostsController : ControllerBase
     {
         try { return await userRepo.GetSingleAsync(userId); }
         catch (NotFoundException) { return null; }
-    }
-
-    private List<CommentDto> BuildCommentDtos(List<Comment> comments)
-    {
-        List<User> users = userRepo.GetManyAsync().ToList();
-        return comments.Select(c => new CommentDto
-        {
-            Id = c.Id,
-            Body = c.Body,
-            PostId = c.PostId,
-            UserId = c.UserId,
-            AuthorName = users.FirstOrDefault(u => u.Id == c.UserId)?.Username ?? "Unknown"
-        }).ToList();
     }
 
     private static PostDto ToDto(Post p, string authorName) => new()
